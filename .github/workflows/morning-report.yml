@@ -1,0 +1,51 @@
+name: Morning Growth Report
+
+on:
+  schedule:
+    # 매일 오전 10시 KST (UTC+9) = UTC 01:00
+    - cron: "0 1 * * *"
+  workflow_dispatch:
+    inputs:
+      report_date:
+        description: "리포트 날짜 (YYYY-MM-DD, 비워두면 오늘)"
+        required: false
+        default: ""
+
+permissions:
+  contents: write
+
+jobs:
+  generate-morning-report:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Generate morning report
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          REPORT_DATE: ${{ inputs.report_date }}
+        run: python .github/scripts/generate_report.py morning
+
+      - name: Update learning backlog
+        env:
+          NIM_API_KEY: ${{ secrets.NIM_API_KEY }}
+          REPORT_DATE: ${{ inputs.report_date }}
+        run: python .github/scripts/update_learning_backlog.py
+        continue-on-error: true
+
+      - name: Commit and push reports
+        run: |
+          git config user.name "growth-bot"
+          git config user.email "growth-bot@users.noreply.github.com"
+          git add reports/ 09_learning_backlog/
+          git diff --staged --quiet || git commit -m "chore: morning report $(date +'%Y-%m-%d')"
+          git push
