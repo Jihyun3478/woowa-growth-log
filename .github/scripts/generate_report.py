@@ -1,9 +1,5 @@
 #!/usr/bin/env python3
-"""Generate morning/evening/weekly growth reports using Claude API.
-
-Reads daily retrospective notes from 00_daily/, combines with learning backlog
-and prompts, then writes reports to reports/{mode}/.
-"""
+"""Generate morning/evening/weekly growth reports using NVIDIA NIM API."""
 
 from __future__ import annotations
 
@@ -27,9 +23,9 @@ SKILL_GOAL_DIR = Path("01_Project")
 PROMPTS_DIR = Path(".github/prompts")
 STYLE_FILE = PROMPTS_DIR / "growth-report-style.md"
 
-ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "").strip()
-ANTHROPIC_MODEL = "claude-sonnet-4-20250514"
-ANTHROPIC_API_URL = "https://api.anthropic.com/v1/messages"
+NIM_API_KEY = os.environ.get("NIM_API_KEY", "").strip()
+NIM_API_URL = "https://integrate.api.nvidia.com/v1/chat/completions"
+NIM_MODEL = "z-ai/glm-5.1"
 
 
 def report_date() -> date:
@@ -76,7 +72,6 @@ def read_prompt(mode: str) -> str:
 
 
 def find_skill_goals() -> str:
-    """현재 레벨 미션의 하드스킬/소프트스킬 목표 파일을 찾아 반환"""
     results = []
     for goal_file in sorted((ROOT / SKILL_GOAL_DIR).rglob("*스킬 목표.md")):
         content = read_text(goal_file)
@@ -176,30 +171,38 @@ def build_weekly_prompt(today: date) -> str:
 """
 
 
-def call_claude(prompt: str) -> str:
-    if not ANTHROPIC_API_KEY:
-        raise ValueError("ANTHROPIC_API_KEY is not set")
+def call_nim(prompt: str) -> str:
+    if not NIM_API_KEY:
+        raise ValueError("NIM_API_KEY is not set")
 
     payload = {
-        "model": ANTHROPIC_MODEL,
+        "model": NIM_MODEL,
+        "messages": [
+            {
+                "role": "system",
+                "content": "당신은 우테코 크루의 성장을 돕는 코치입니다. 데일리 회고를 바탕으로 성장 리포트를 작성합니다.",
+            },
+            {"role": "user", "content": prompt},
+        ],
+        "temperature": 0.2,
         "max_tokens": 3000,
-        "messages": [{"role": "user", "content": prompt}],
+        "stream": False,
     }
 
     request = urllib.request.Request(
-        ANTHROPIC_API_URL,
+        NIM_API_URL,
         data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
         headers={
-            "x-api-key": ANTHROPIC_API_KEY,
-            "anthropic-version": "2023-06-01",
-            "content-type": "application/json",
+            "Authorization": f"Bearer {NIM_API_KEY}",
+            "Content-Type": "application/json",
+            "Accept": "application/json",
         },
         method="POST",
     )
 
     with urllib.request.urlopen(request, timeout=120) as response:
         data = json.loads(response.read().decode("utf-8"))
-        return data["content"][0]["text"]
+        return data["choices"][0]["message"]["content"]
 
 
 def save_report(content: str, mode: str, today: date) -> Path:
@@ -213,7 +216,6 @@ def save_report(content: str, mode: str, today: date) -> Path:
     output_dir.mkdir(parents=True, exist_ok=True)
     output_path = output_dir / filename
 
-    # YAML frontmatter 추가
     frontmatter = f"""---
 created: {datetime.now(KST).strftime("%Y-%m-%d %H:%M:%S")} KST
 report_date: {today.isoformat()}
@@ -258,7 +260,7 @@ def main() -> None:
         prompt = build_weekly_prompt(today)
 
     try:
-        content = call_claude(prompt)
+        content = call_nim(prompt)
     except (urllib.error.URLError, urllib.error.HTTPError) as e:
         print(f"API call failed: {e}")
         sys.exit(1)
@@ -273,3 +275,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+    
