@@ -30,7 +30,7 @@ jobs:
 
       - name: Generate evening report
         env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.NIM_API_KEY }}
           REPORT_DATE: ${{ inputs.report_date }}
         run: python .github/scripts/generate_report.py evening
 
