@@ -30,7 +30,7 @@ jobs:
 
       - name: Generate weekly report
         env:
-          ANTHROPIC_API_KEY: ${{ secrets.NIM_API_KEY }}
+          NIM_API_KEY: ${{ secrets.NIM_API_KEY }}
           REPORT_DATE: ${{ inputs.report_date }}
         run: python .github/scripts/generate_report.py weekly
 
